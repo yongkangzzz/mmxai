@@ -1,99 +1,53 @@
-from flask import Flask, make_response,Response,render_template, request, url_for, redirect, session, send_from_directory
-from datetime import datetime
-from lime4mmf import lime_mmf
-from flask_apscheduler import APScheduler
-from config import APSchedulerJobConfig
-#from shap4mmf import shap_mmf
-from text_removal.smart_text_removal import SmartTextRemover
-from datetime import timedelta
+from flask import Flask, render_template, request, url_for, redirect, session
+from mmxai.interpretability.classification.lime import lime_mmf
+from shap4mmf import shap_mmf
+from mmxai.interpretability.classification.torchray.extremal_perturbation import torchray_mmf
+from mmxai.text_removal.smart_text_removal import SmartTextRemover
+from app_utils import prepare_explanation, text_visualisation
+import os
 import random
-from file_manage import *
-from flask_sqlalchemy import SQLAlchemy
-import socket
+
 
 app = Flask(__name__)
-app.config.from_object(APSchedulerJobConfig)
-app.config['SECRET_KEY'] = os.urandom(24)
-#app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=120)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.secret_key = 'Secret Key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///user_info.sqlite3'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
-# 查询时会显示原始SQL语句
-app.config['SQLALCHEMY_ECHO'] = True
-db = SQLAlchemy(app)
 
-class user_info(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    file_name =db.Column(db.String(20))
-    ip_addr = db.Column(db.String(20))
 
-    def __init__(self,file_name,ip_addr):
-        self.file_name = file_name
-        self.ip_addr = ip_addr
+def mkdir(path):
+    path = path.strip()
+    path = path.rstrip("\\")
+    isExists = os.path.exists(path)
+    if not isExists:
+        os.makedirs(path)
+        print(path + "Directory created successfully")
+        return True
+    else:
+        print(path + "Directory has already existed!")
+        return False
+
 
 def generate_random_str(randomlength=16):
-  """
-  生成一个指定长度的随机字符串
-  """
-  random_str = ''
-  base_str = 'ABCDEFGHIGKLMNOPQRSTUVWXYZabcdefghigklmnopqrstuvwxyz0123456789'
-  length = len(base_str) - 1
-  for i in range(randomlength):
-    random_str += base_str[random.randint(0, length)]
-  return random_str
+    random_str = ''
+    base_str = 'ABCDEFGHIGKLMNOPQRSTUVWXYZabcdefghigklmnopqrstuvwxyz0123456789'
+    length = len(base_str) - 1
+    for i in range(randomlength):
+        random_str += base_str[random.randint(0, length)]
+    return random_str
+
 
 @app.before_request
 def before_request():
-    id = generate_random_str(8)
-    if session.get('user') == None:
-        mkdir('./static./user/' + id)
-        print(id + "created")
-        session['user'] = id
+    user_id = generate_random_str(8)
+    if session.get('user') is None:
+        mkdir('./static/user/' + user_id)
+        print(user_id + "created")
+        session['user'] = user_id
     else:
-        print("Not none")
-
-# @app.after_request
-# def after_request(response):
-#     now = datetime.now()
-#     try:
-#         last_active = session['last_active']
-#         delta = now - last_active
-#         print(delta.seconds)
-#         if delta.seconds > 5:
-#             session['last_active'] = now
-#             file_path = './static/user/' + session['user']
-#             print(file_path)
-#             clean(file_path)
-#             if(os.path.exists(file_path)):
-#                 os.rmdir(file_path)
-#             print("expired")
-#             response = Response("expired")
-#             response.response = render_template('home.html')
-#             return response
-#     except:
-#         pass
-#
-#     try:
-#         session['last_active'] = now
-#         return response
-#     except:
-#         pass
-
+        print(session.get('user') + " has existed")
 
 
 @app.route('/')
 def home():
-    ip_addr = request.remote_addr
-    users_delete = user_info.query.filter_by(ip_addr=ip_addr).all()
-    if len(users_delete) != 0:
-        for user_delete in users_delete:
-            db.session.delete(user_delete)
-            db.session.commit()
-        file_name = session['user']
-        user_insert = user_info(file_name,ip_addr)
-        db.session.add(user_insert)
-        db.session.commit()
     return render_template('home.html')
 
 
@@ -102,74 +56,106 @@ def docs():
     return render_template('docsify.html')
 
 
-@app.route('/docs/<path:path>')
-def send_js(path):
-    return send_from_directory('docs', path)
-
-
 @app.route('/explainers/hateful-memes')
 def hateful_memes():
-    filename_img = request.args.get('imgName')
-    filename_exp = request.args.get('imgExp')
-    if filename_img is None:
-        filename_img = 'logo.png'
-    if filename_exp is None:
-        filename_exp = 'logo.png'
-    text = request.args.get('imgTexts')
-    result = request.args.get('explanations')
-    print("in home:", result)
-    session['imgName'] = filename_img
-    session['imgTexts'] = text
-    session['imgExp'] = filename_exp
-    session['explanations'] = result
-    return render_template('explainers/hateful-memes.html', expMethod='Select a method', imgName=filename_img, imgTexts=text, imgExp=filename_exp, explanations=result)
+    img_name = session.get('imgName')
+    img_exp = session.get('imgExp')
+    img_text = session.get('imgText')
+    text_exp = session.get('textExp')
+    user_model = session.get('userModel')
+    model_type = session.get('modelType')
+    model_path = session.get('modelPath')
+    cls_result = session.get('clsResult')
+    exp_text_visl = session.get('textVisual')
+
+    if img_name is None:
+        img_name = 'logo.png'
+    if img_exp is None:
+        img_exp = 'logo.png'
+
+    if model_path is not None:
+        model_name = model_path.split('/')[-1]
+        # only display part of the filename if the filename is longer than 6 chars
+        name, extension = os.path.splitext(model_name)
+        if len(name) > 6:
+            model_name = name[0:3] + '...' + name[-1] + extension
+    else:
+        model_name = None
+
+    if user_model == 'no_model':
+        cur_opt = 'MMF ({}) with pretrained checkpoint'.format(model_type)
+    elif user_model == 'mmf':
+        cur_opt = 'MMF ({}) with user checkpoint'.format(model_type)
+    elif user_model == 'onnx':
+        cur_opt = 'ONNX'
+    else:
+        cur_opt = None
+
+    print("xxx", exp_text_visl)
+    return render_template('explainers/hateful-memes.html', imgName=img_name, imgTexts=img_text, imgExp=img_exp,
+                           textExp=text_exp, clsResult=cls_result, curOption=cur_opt, fileName=model_name, textVisual=exp_text_visl)
 
 
 @app.route('/uploadImage', methods=['POST'])
-def uploadImage():
+def upload_image():
     file = request.files['inputImg']
-    print('.//static//' + 'user/' + session['user'] + file.filename)
-    img_path = './/static//' + 'user/' + session['user'] + '/' + file.filename
     img_name = 'user/' + session['user'] + '/' + file.filename
+    img_path = 'static/' + img_name
     file.save(img_path)
-    return redirect(url_for('hateful_memes', imgName=img_name))
+    session['imgName'] = img_name
+    session['imgText'] = None
+    session['imgExp'] = None
+    session['textExp'] = None
+    session['textVisual'] = None
+    session['clsResult'] = None
+    return redirect(url_for('hateful_memes'))
 
 
 @app.route('/uploadModel', methods=['POST'])
-def uploadModel():
+def upload_model():
     option = request.form['selectOption']
     if option == 'internalModel':
         selectedModel = request.form['selectModel']
         file = request.files['inputCheckpoint1']
-        print(file.filename)
-        print(selectedModel)
-        file.save('.//static//' + file.filename)
+        file_path = 'user/' + session['user'] + '/' + file.filename
+        session['modelPath'] = file_path
+        session['modelType'] = selectedModel
+        session['userModel'] = 'mmf'
+        file.save('static/' + file_path)
     elif option == 'selfModel':
         file = request.files['inputCheckpoint2']
-        print(file.filename)
-        file.save('.//static//' + file.filename)
+        file_path = 'user/' + session['user'] + '/' + file.filename
+        session['modelPath'] = file_path
+        session['modelType'] = None
+        session['userModel'] = 'onnx'
+        file.save('static/' + file_path)
     elif option == 'noModel':
         selectedExistingModel = request.form['selectExistingModel']
-        print(selectedExistingModel)
+        session['modelType'] = selectedExistingModel
+        session['modelPath'] = None
+        session['userModel'] = 'no_model'
     else:
         raise Exception("Sorry, you must select an option to continue!!!")
     return redirect(url_for('hateful_memes'))
 
-@app.route('/inpaint/<imgName>')
-def inpaint(imgName):
+
+@app.route('/inpaint')
+def inpaint():
+    img_name = session.get('imgName')
     # Prepare the image path and names
-    folder_path = './static/'
-    image_path = folder_path + imgName
-    
-    img_name_no_extension = os.path.splitext(imgName)[0]
-    img_extension = os.path.splitext(imgName)[1]
+    folder_path = 'static/'
+    image_path = folder_path + img_name
+
+    img_name_no_extension = os.path.splitext(img_name)[0]
+    img_extension = os.path.splitext(img_name)[1]
 
     inpainted_image_name = img_name_no_extension + "_inpainted" + img_extension
     save_path = folder_path + inpainted_image_name
-
+    print(save_path)
     if not os.path.isfile(save_path):
         # Load the inpainter
-        inpainter = SmartTextRemover("text_removal/frozen_east_text_detection.pb")
+        inpainter = SmartTextRemover(
+            "../mmxai/text_removal/frozen_east_text_detection.pb")
 
         # Inpaint image
         img_inpainted = inpainter.inpaint(image_path)
@@ -177,34 +163,72 @@ def inpaint(imgName):
         # save inpainted image
         img_inpainted.save(save_path)
 
-    return redirect(url_for('hateful_memes', imgName=inpainted_image_name))
+    session['imgName'] = inpainted_image_name
+    return redirect(url_for('hateful_memes'))
 
-@app.route('/explainers/hateful-memes/predict/<imgName>', methods=['POST'])
-def predict(imgName):
-    text = request.form['texts']
-    expMethod = request.form['expMethod']
-    imgName = imgName.strip("'()")
-    if expMethod == 'shap':
-        #result, imgExp = shap_mmf.predict_HM(imgName, text)
-        result, imgExp = lime_mmf.lime_multimodal_explain(imgName, text)
-    elif expMethod == 'lime':
-        result, imgExp = lime_mmf.lime_multimodal_explain(imgName, text)
-    elif expMethod == 'torchray':
-        result = ['coming soon!']
+
+@app.route('/restoreImage')
+def restore():
+    img_path = session['imgName']
+    root, extension = os.path.splitext(img_path)
+    if '_inpainted' in root:
+        img_path = root[:-10] + extension
+        session['imgName'] = img_path
+    return redirect(url_for('hateful_memes'))
+
+
+@app.route('/explainers/hateful-memes/predict', methods=['POST'])
+def predict():
+    img_text = request.form['texts']
+    exp_method = request.form['expMethod']
+    exp_direction = request.form['expDir']
+    user_model = session.get('userModel')
+    img_name = session.get('imgName')
+    model_type = session.get('modelType')
+    model_path = session.get('modelPath')
+
+    model, label_to_explain, cls_label, cls_confidence = prepare_explanation(
+        img_name, img_text, user_model, model_type, model_path, exp_direction)
+
+    hateful = 'HATEFUL' if cls_label == 1 else 'NON-HATEFUL'
+    cls_result = 'Your uploaded image and text combination ' \
+                 'looks like a {} meme, with {}% confidence.'.format(hateful, "%.2f" % (cls_confidence * 100))
+    print(cls_result)
+
+    if exp_method == 'shap':
+        text_exp, img_exp = shap_mmf.shap_multimodal_explain(img_name, img_text, model)
+    elif exp_method == 'lime':
+        text_exp, img_exp = lime_mmf.lime_multimodal_explain(img_name, img_text, model)
+    elif exp_method == 'torchray':
+        text_exp, img_exp = torchray_mmf.torchray_multimodal_explain(img_name, img_text, model)
     else:
-        #result = shap_mmf.predict_HM(imgName, text)
-        result, imgExp = lime_mmf.lime_multimodal_explain(imgName, text)
+        text_exp, img_exp = shap_mmf.shap_multimodal_explain(img_name, img_text, model)
 
-    print(result)
-    # response = make_response(render_template('home.html', imgName=imgName, imgTexts=text, imgExp="shap4mmf.png", explanations=result))
-    # response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    # response.headers['Pragma'] = 'no-cache'
-    return render_template('explainers/hateful-memes.html', imgName=imgName, imgTexts=text, imgExp=imgExp, explanations=result)
+    session['clsResult'] = cls_result
+    session['imgText'] = img_text
+    session['textExp'] = text_exp
+    session['imgExp'] = img_exp
+
+    img_exp_name, _ = os.path.splitext(img_exp)
+    exp_text_visl = img_exp_name + '_text.png'
+    try:
+        print("SHAP text")
+        print(type(text_exp))
+        print(text_exp)
+
+        text_visualisation(text_exp, cls_label, exp_text_visl)
+        session['textVisual'] = exp_text_visl
+    except:
+        print("error unable to plot shap text")
+        session['textVisual'] = None
+
+    print(session['imgText'])
+    print(session['textExp'])
+    print(session['imgExp'])
+    print(session['modelPath'])
+
+    return redirect(url_for('hateful_memes'))
 
 
 if __name__ == '__main__':
     app.run()
-
-scheduler = APScheduler()
-scheduler.init_app(app)
-scheduler.start()

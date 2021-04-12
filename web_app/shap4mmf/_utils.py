@@ -14,6 +14,7 @@ import numpy as np
 import cv2
 from PIL import Image
 
+
 def read_labels(label_file: str, append_dir: False) -> list:
     """ utility that reads data labels
 
@@ -106,14 +107,14 @@ def feature_preparation(model: 'MMF_MODEL', data) -> List[Tuple]:
 
 def resize_image(images: np.ndarray, dsize: Tuple):
     """ Resize all images to the size given
-    
+
     Args:
         images: numpy array of shape (N, D1, D2, C)
                 N = numper of samples
                 D1 and D2 are image dimensions
                 C = number of channels
         dsize: tuple to resize D1 and D2 to
-    
+
     Returns:
         Transformed image array
     """
@@ -129,12 +130,13 @@ def show_image(image: np.array):
     img = Image.fromarray(image.astype(np.uint8))
     img.show()
 
+
 def arr_to_img(images):
     # greyscale to rgb
     if len(images[0].shape) == 3 and images[0].shape[2] == 1:
-        images = [Image.fromarray(img.squeeze(2), 'L')
-                    for img in images]
+        images = [Image.fromarray(img.astype(np.uint8).squeeze(2), 'L')
+                  for img in images]
     else:
-        images = [Image.fromarray(img) for img in images]
+        images = [Image.fromarray(img.astype(np.uint8)) for img in images]
 
     return images

@@ -1,9 +1,10 @@
 import matplotlib.pyplot as pl
 import numpy as np
-from . import colors
-from ._legacy import kmeans
+from shap.plots import colors
+from shap.utils._legacy import kmeans
 import io
 from PIL import Image
+
 
 def image(shap_values, pixel_values=None, labels=None, width=6, aspect=0.2, labelpad=None):
     """ Plots SHAP values for image inputs.
@@ -39,9 +40,11 @@ def image(shap_values, pixel_values=None, labels=None, width=6, aspect=0.2, labe
         feature_names = [shap_exp.feature_names]
         ind = 0
         if len(shap_exp.base_values.shape) == 2:
-            shap_values = [shap_exp.values[..., i] for i in range(shap_exp.values.shape[-1])]
+            shap_values = [shap_exp.values[..., i]
+                           for i in range(shap_exp.values.shape[-1])]
         else:
-            raise Exception("Number of outputs needs to have support added!! (probably a simple fix)")
+            raise Exception(
+                "Number of outputs needs to have support added!! (probably a simple fix)")
         if pixel_values is None:
             pixel_values = shap_exp.data
         if labels is None:
@@ -57,9 +60,11 @@ def image(shap_values, pixel_values=None, labels=None, width=6, aspect=0.2, labe
         labels = np.array(labels)
         assert labels.shape[0] == shap_values[0].shape[0], "Labels must have same row count as shap_values arrays!"
         if multi_output:
-            assert labels.shape[1] == len(shap_values), "Labels must have a column for each output in shap_values!"
+            assert labels.shape[1] == len(
+                shap_values), "Labels must have a column for each output in shap_values!"
         else:
-            assert len(labels.shape) == 1, "Labels must be a vector for single output shap_values."
+            assert len(
+                labels.shape) == 1, "Labels must be a vector for single output shap_values."
 
     label_kwargs = {} if labelpad is None else {'pad': labelpad}
 
@@ -67,12 +72,12 @@ def image(shap_values, pixel_values=None, labels=None, width=6, aspect=0.2, labe
     x = pixel_values
     print(x.shape)
     if x.shape[1] < x.shape[2]:
-        fig_size = np.array([x.shape[2], x.shape[1]+200])
+        fig_size = np.array([x.shape[2], x.shape[1] + 200])
         if fig_size[0] > width:
             fig_size = fig_size * width / fig_size[0]
         orientation = "horizontal"
     else:
-        fig_size = np.array([x.shape[2]+100, x.shape[1]])
+        fig_size = np.array([x.shape[2] + 100, x.shape[1]])
         if fig_size[0] > width:
             fig_size = fig_size * width / fig_size[0]
         orientation = "vertical"
@@ -98,17 +103,19 @@ def image(shap_values, pixel_values=None, labels=None, width=6, aspect=0.2, labe
     # get a grayscale version of the image
     if len(x_curr.shape) == 3 and x_curr.shape[2] == 3:
         x_curr_gray = (
-                    0.2989 * x_curr[:, :, 0] + 0.5870 * x_curr[:, :, 1] + 0.1140 * x_curr[:, :, 2])  # rgb to gray
+            0.2989 * x_curr[:, :, 0] + 0.5870 * x_curr[:, :, 1] + 0.1140 * x_curr[:, :, 2])  # rgb to gray
         x_curr_disp = x_curr
     elif len(x_curr.shape) == 3:
         x_curr_gray = x_curr.mean(2)
 
         # for non-RGB multi-channel data we show an RGB image where each of the three channels is a scaled k-mean center
-        flat_vals = x_curr.reshape([x_curr.shape[0] * x_curr.shape[1], x_curr.shape[2]]).T
+        flat_vals = x_curr.reshape(
+            [x_curr.shape[0] * x_curr.shape[1], x_curr.shape[2]]).T
         flat_vals = (flat_vals.T - flat_vals.mean(1)).T
-        means = kmeans(flat_vals, 3, round_values=False).data.T.reshape([x_curr.shape[0], x_curr.shape[1], 3])
+        means = kmeans(flat_vals, 3, round_values=False).data.T.reshape(
+            [x_curr.shape[0], x_curr.shape[1], 3])
         x_curr_disp = (means - np.percentile(means, 0.5, (0, 1))) / (
-                    np.percentile(means, 99.5, (0, 1)) - np.percentile(means, 1, (0, 1)))
+            np.percentile(means, 99.5, (0, 1)) - np.percentile(means, 1, (0, 1)))
         x_curr_disp[x_curr_disp > 1] = 1
         x_curr_disp[x_curr_disp < 0] = 0
     else:
@@ -119,17 +126,21 @@ def image(shap_values, pixel_values=None, labels=None, width=6, aspect=0.2, labe
     # axes[row,0].axis('off')
 
     if len(shap_values[0][row].shape) == 2:
-        abs_vals = np.stack([np.abs(shap_values[i]) for i in range(len(shap_values))], 0).flatten()
+        abs_vals = np.stack([np.abs(shap_values[i])
+                             for i in range(len(shap_values))], 0).flatten()
     else:
-        abs_vals = np.stack([np.abs(shap_values[i].sum(-1)) for i in range(len(shap_values))], 0).flatten()
+        abs_vals = np.stack([np.abs(shap_values[i].sum(-1))
+                             for i in range(len(shap_values))], 0).flatten()
     max_val = np.nanpercentile(abs_vals, 99.9)
     for i in range(len(shap_values)):
         if labels is not None:
             axes[row, i].set_title(labels[row, i], **label_kwargs)
-        sv = shap_values[i][row] if len(shap_values[i][row].shape) == 2 else shap_values[i][row].sum(-1)
+        sv = shap_values[i][row] if len(
+            shap_values[i][row].shape) == 2 else shap_values[i][row].sum(-1)
         axes[row, i].imshow(x_curr_gray, cmap=pl.get_cmap('gray'), alpha=0.15,
-                                extent=(-1, sv.shape[1], sv.shape[0], -1))
-        im = axes[row, i].imshow(sv, cmap=colors.red_transparent_blue, vmin=-max_val, vmax=max_val)
+                            extent=(-1, sv.shape[1], sv.shape[0], -1))
+        im = axes[row, i].imshow(
+            sv, cmap=colors.red_transparent_blue, vmin=-max_val, vmax=max_val)
         axes[row, i].axis('off')
 
     cb = fig.colorbar(im, ax=np.ravel(axes).tolist(), label="SHAP value", orientation=orientation,

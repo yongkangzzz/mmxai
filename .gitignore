@@ -24,3 +24,7 @@ mmf/*
 .envrc
 # images during dev
 web_app/static/*.png
+web_app/static/user/*
+web_app/.idea
+# .egg-info folders
+*.egg-info/

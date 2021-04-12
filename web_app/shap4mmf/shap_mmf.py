@@ -1,17 +1,16 @@
 from mmf.models.mmbt import MMBT
+from mmf.models.fusions import LateFusion
+from mmf.models.vilbert import ViLBERT
+from mmf.models.visual_bert import VisualBERT
 import torch
 from shap4mmf._explainer import Explainer
 import numpy as np
 from PIL import Image
-
 import os
-dirname = os.path.dirname(__file__)
 
-def predict_HM(image_name, text):
-    model = MMBT.from_pretrained("mmbt.hateful_memes.images")
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    image = "static\\" + image_name
+
+def shap_multimodal_explain(image_name, text, model):
+    image = "static/" + image_name
     output = model.classify(image, text)
     # Explainer hyper params
     max_evals = 100
@@ -24,15 +23,13 @@ def predict_HM(image_name, text):
         target_images = target_images[:, :, :3]
     target_images = target_images.reshape(1, target_images.shape[0], target_images.shape[1], target_images.shape[2])
     target_texts = np.array([text])
-    image_shap_values = explainer.explain(target_images, target_texts, "image_only")
-    PIL_image = explainer.image_plot(image_shap_values)
-    exp_image = 'shap_' + image_name
-    filename = os.path.join(dirname, '../static/' + exp_image)
-    PIL_image.save(filename)
-    # hateful = "hateful" if output["label"] == 1 else "not hateful"
-    # result = "This image is: " + hateful + ". " + f"Model's confidence: {output['confidence'] * 100:.3f}%"
-    result = []
-    hateful = "Hateful" if output["label"] == 1 else "Not Hateful"
-    result.append("This image is: " + hateful)
-    result.append(f"Model's confidence: {output['confidence'] * 100:.3f}%")
-    return result, exp_image
+    image_shap_values, text_shap_values = explainer.explain(target_images, target_texts, "multimodal")
+    PIL_image_list = explainer.image_plot(image_shap_values)
+    text_exp_list = explainer.parse_text_values(text_shap_values, 1)
+    PIL_image = PIL_image_list[0]
+
+    name_split_list = os.path.splitext(image_name)
+    exp_image = name_split_list[0] + '_shap.png'
+    PIL_image.save("static/" + exp_image)
+
+    return text_exp_list[0], exp_image

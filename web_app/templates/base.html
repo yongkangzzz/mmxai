@@ -18,6 +18,7 @@
       type="text/css"
       href="{{ url_for('static', filename='css/style.css') }}"
     />
+    {% block override_style %}{% endblock %}
     <link
       rel="icon"
       href="{{ url_for('static', filename='img/black-box-icon.png') }}"
@@ -117,7 +118,7 @@
                   class="nav-link"
                   href="https://gitlab.doc.ic.ac.uk/g207004202/explainable-multimodal-classification"
                 >
-                  Gitlab
+                  GitLab
                 </a>
               </li>
             </ul>
@@ -130,8 +131,8 @@
     <main role="main" class="container">{% block body %}{% endblock %}</main>
     <!-- Footer -->
     <footer class="footer">
-      <div class="container">
-        <span class="text-muted">Copyright</span>
+      <div class="container text-center">
+        <span class="text-white">Copyright ©</span>
       </div>
     </footer>
 

@@ -1,24 +1,33 @@
 function loading() {
   localStorage.setItem(
-    "methods",
-    document.getElementById("selectMethod").value
+      "methods",
+      document.getElementById("selectMethod").value
   );
   document.getElementById("loader").style.display = "block";
   console.log(document.getElementById("loader").style.display);
   document.getElementById("bglogo").style.display = "none";
-  document.getElementById("textarea").innerHTML = "Predicting...Please wait...";
+  document.getElementById("txtVisl").style.display = "none";
+  document.getElementById("infArea").innerHTML = "Predicting...Please wait...";
+}
+
+function stashTextInput() {
+  console.log("txt changed")
+  localStorage.setItem(
+      "txtInput",
+      document.getElementById("textInput").value
+  );
 }
 
 function showOptionForm(that) {
-  if (that.value == "internalModel") {
+  if (that.value === "internalModel") {
     document.getElementById("internalModel").style.display = "block";
     document.getElementById("selfModel").style.display = "none";
     document.getElementById("noModel").style.display = "none";
-  } else if (that.value == "selfModel") {
+  } else if (that.value === "selfModel") {
     document.getElementById("internalModel").style.display = "none";
     document.getElementById("selfModel").style.display = "block";
     document.getElementById("noModel").style.display = "none";
-  } else if (that.value == "noModel") {
+  } else if (that.value === "noModel") {
     document.getElementById("internalModel").style.display = "none";
     document.getElementById("selfModel").style.display = "none";
     document.getElementById("noModel").style.display = "block";
@@ -38,11 +47,16 @@ window.addEventListener("DOMContentLoaded", (event) => {
   var selectedVal = localStorage.getItem("methods");
   if (selectedVal) {
     document.getElementById("selectMethod").value = selectedVal;
-    localStorage.removeItem("methods");
+    // localStorage.removeItem("methods");
+  }
+  var txtInput = localStorage.getItem("txtInput");
+  if (txtInput) {
+    document.getElementById("textInput").value = txtInput;
+    localStorage.removeItem("txtInput");
   }
 });
 
-let tut = document.querySelector("#tut");
+let tut = document.querySelector("#btnTutorial");
 tut.onclick = function () {
   setTimeout(() => {
     const driver = new Driver();
@@ -52,7 +66,7 @@ tut.onclick = function () {
         popover: {
           title: "Step 1",
           description:
-            "Click here to select a model or upload your own checkpoints",
+              "Click here to select a model or upload your own checkpoints",
         },
       },
       {
@@ -67,7 +81,15 @@ tut.onclick = function () {
         popover: {
           title: "Then",
           description:
-            "After uploading, your selected image will be displayed here",
+              "After uploading, your selected image will be displayed here",
+        },
+      },
+      {
+        element: "#btnInpaint",
+        popover: {
+          title: "Next: An Optional Choice, Text Removal",
+          description:
+              "If you want to remove texts that appears on the uploaded image, click this button",
         },
       },
       {
@@ -75,7 +97,7 @@ tut.onclick = function () {
         popover: {
           title: "Step 3",
           description:
-            "After uploading the image, add some texts to the image here",
+              "After uploading the image, add some texts to the image here",
         },
       },
       {
@@ -86,9 +108,16 @@ tut.onclick = function () {
         },
       },
       {
-        element: "#btnPredict",
+        element: "#selectExpDir",
         popover: {
           title: "Step 5",
+          description: "If you want to see what factors in image/texts support model's prediction, select 'Encourage'. If you want to see what factors are against model's prediction, select 'Discourage'",
+        },
+      },
+      {
+        element: "#btnPredict",
+        popover: {
+          title: "Step 6",
           description: "Press this Button to run the explainable algorithm",
         },
       },
@@ -97,14 +126,14 @@ tut.onclick = function () {
         popover: {
           title: "Finally",
           description:
-            "It may take about 2 minutes to run the interpretable algorithm. The result image will be shown here.",
+              "It may take about 2 minutes to run the interpretable algorithm. The result image will be shown here.",
         },
       },
       {
         element: "#textarea",
         popover: {
           title: "Finally",
-          description: "Meanwhile the result text will be shown here.",
+          description: "Meanwhile the explanation for texts will be shown here.",
         },
       },
     ];
