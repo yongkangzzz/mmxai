@@ -1,3 +1,5 @@
+python ==3.7.0
+flask
 lime
 shap
 torchray
